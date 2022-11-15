@@ -1,0 +1,27 @@
+{
+    "name": "rise-deploybackend",
+    "version": "0.0.1",
+    "description": "",
+    "main": "dist/index.js",
+    "scripts": {
+        "test": "vitest",
+        "test:run": "vitest run",
+        "build": "tsc --declaration -p tsconfig-build.json",
+        "release": "npm run build && npm publish"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "aws-foundation": "^0.0.11",
+        "cli-foundation": "^0.0.6",
+        "deployinfra": "*"
+    },
+    "devDependencies": {
+        "@types/jest": "^29.1.1",
+        "@types/node": "^18.7.23",
+        "aws-sdk": "^2.1227.0",
+        "ts-node": "^10.9.1",
+        "typescript": "^4.8.4",
+        "vitest": "^0.23.4"
+    }
+}
