@@ -1,15 +1,14 @@
-import cli from 'cli-foundation'
-import aws from 'aws-foundation'
-import { deployInfra } from 'deployinfra' //'../../../deployInfra'
+import * as filesystem from 'rise-filesystem-foundation'
+import * as aws from 'rise-aws-foundation'
+import { deployInfra } from 'rise-deployinfra'
+import process from 'node:process'
 
-export async function deployApplicationBucket(
-    appName: string,
-    stage: string,
-    region: string
-): Promise<string> {
-    /**
-     * Deploy Stack
-     */
+/**
+ * @param {string} appName
+ * @param {string} stage
+ * @param {string} region
+ */
+export async function deployApplicationBucket(appName, stage, region) {
     const bucketTemplate = aws.s3.makeBucket('Main')
     const stackName = appName + stage + '-bucket'
 
@@ -25,9 +24,9 @@ export async function deployApplicationBucket(
         throw new Error(result.message)
     }
 
-    cli.filesystem.writeFile({
+    filesystem.writeFile({
         path: '/.rise/data.js',
-        content: `module.exports = { bucketName: "${result.outputs.MainBucket}"}`,
+        content: `export const config = { bucketName: "${result.outputs.MainBucket}"}`,
         projectRoot: process.cwd()
     })
 

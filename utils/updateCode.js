@@ -1,25 +1,27 @@
-import cli from 'cli-foundation'
-import aws from 'aws-foundation'
-import { ZipConfig } from '../../types'
+import * as filesystem from 'rise-filesystem-foundation'
+import * as aws from 'rise-aws-foundation'
+import process from 'node:process'
 
-type Input = {
-    appName: string
-    stage: string
-    region: string
-    bucket: string
-    zipConfig: ZipConfig
-}
-
+/**
+ * @param {string} appName
+ * @param {string} stage
+ * @param {string} region
+ * @param {string} bucket
+ * @param {object} config
+ * @param {string} config.functionsLocation
+ * @param {string} config.zipTarget
+ * @param {string} config.hiddenFolder
+ */
 export async function updateLambdaCode({
     appName,
     stage,
     region,
     bucket,
     zipConfig
-}: Input) {
+}) {
     const getAllPaths = () => {
         const lambaPaths = zipConfig.functionsLocation
-        const lambdas = cli.filesystem.getDirectories({
+        const lambdas = filesystem.getDirectories({
             path: lambaPaths,
             projectRoot: process.cwd()
         })
@@ -32,7 +34,7 @@ export async function updateLambdaCode({
         ]
     }
 
-    const getFunctionName = (name: string) => `${appName}-${name}-${stage}`
+    const getFunctionName = (name) => `${appName}-${name}-${stage}`
     for (const l of getAllPaths()) {
         const lambdaName = getFunctionName(l.name)
 

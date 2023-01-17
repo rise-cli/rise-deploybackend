@@ -1,11 +1,18 @@
-import cli from 'cli-foundation'
-import aws from 'aws-foundation'
-import { ZipConfig } from '../../types'
+import * as filesystem from 'rise-filesystem-foundation'
+import * as aws from 'rise-aws-foundation'
+import process from 'node:process'
 
-export async function uploadLambdas(bucketName: string, config: ZipConfig) {
+/**
+ * @param {string} bucketName
+ * @param {object} config
+ * @param {string} config.functionsLocation
+ * @param {string} config.zipTarget
+ * @param {string} config.hiddenFolder
+ */
+export async function uploadLambdas(bucketName, config) {
     const getAllPaths = () => {
         const lambaPaths = config.functionsLocation
-        const lambdas = cli.filesystem.getDirectories({
+        const lambdas = filesystem.getDirectories({
             path: lambaPaths,
             projectRoot: process.cwd()
         })
@@ -15,7 +22,7 @@ export async function uploadLambdas(bucketName: string, config: ZipConfig) {
     let result = []
     const paths = getAllPaths()
     for (const path of paths) {
-        const file = await cli.filesystem.getFile({
+        const file = await filesystem.getFile({
             path,
             projectRoot: process.cwd()
         })

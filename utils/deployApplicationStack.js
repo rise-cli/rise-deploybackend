@@ -1,19 +1,67 @@
-import cli from 'cli-foundation'
-import aws from 'aws-foundation'
-import { deployInfra } from 'deployinfra'
-import { FunctionConfig, ZipConfig } from '../../types'
+import * as filesystem from 'rise-filesystem-foundation'
+import * as aws from 'rise-aws-foundation'
+import { deployInfra } from 'rise-deployinfra'
+import process from 'node:process'
 
-type Input = {
-    region: string
-    appName: string
-    bucketArn: string
-    stage: string
-    dashboard: boolean
-    config: Record<string, FunctionConfig>
-    zipConfig: ZipConfig
-    additionalResources?: any
-}
+/**
+ * @typedef {object} ZipConfig
+ * @param {string} functionsLocation
+ * @param {string} zipTarget
+ * @param {string} hiddenFolder
+ */
 
+/**
+ * @typedef {object} EventRule
+ * @param {string} source
+ * @param {string} name
+ * @param {string} bus
+ */
+
+/**
+ * @typedef {object} UrlConfig
+ * @param {string} method
+ * @param {string} path
+ * @param {boolean} auth
+ */
+
+/**
+ * @typedef {object} Permission
+ * @param {string | Array.of<string>} Action
+ * @param {string | Array.of<string>} Effect
+ * @param {string | Array.of<string>} Resource
+ */
+
+/**
+ * @typedef {object} AlarmConfig
+ * @param {number} threshold
+ * @param {string} snsTopic
+ * @param {string} [description]
+ * @param {number} [period]
+ * @param {number} [evaluationPeriods]
+ */
+/**
+ * @typedef {object} FunctionConfig
+ * @param {UrlConfig | "None"} url
+ * @param {object} env Record<string, string>
+ * @param {Array.of<Permission>} permissions
+ * @param {EventRule | "None"} eventRule
+ * @param {AlarmConfig | "None"} alarm
+ * @param {number} timeout
+ * @param {Array.of<string>} layers
+ * @param {object} [dashboard] Record<string, string>
+ */
+
+/**
+ * @param {object} props
+ * @param {string} props.region
+ * @param {string} props.appName
+ * @param {string} props.bucketArn
+ * @param {string} props.stage
+ * @param {boolean} props.dashboard
+ * @param {object} props.config  Record<string, FunctionConfig>
+ * @param {ZipConfig} props.zipConfig
+ * @param {object} [props.additionalResources]
+ */
 export async function deployApplication({
     region,
     appName,
@@ -23,13 +71,13 @@ export async function deployApplication({
     config,
     zipConfig,
     additionalResources
-}: Input) {
+}) {
     /**
      * Helpers
      */
     const getZipPaths = () => {
         const lambaPaths = zipConfig.functionsLocation
-        const lambdas = cli.filesystem.getDirectories({
+        const lambdas = filesystem.getDirectories({
             path: lambaPaths,
             projectRoot: process.cwd()
         })
@@ -152,7 +200,7 @@ export async function deployApplication({
      *
      */
     let addAuth = false
-    let urlConfigs: any[] = []
+    let urlConfigs = []
     const zipPaths = getZipPaths()
     zipPaths.forEach((x) => {
         const permissions = config[x.name]
@@ -162,13 +210,38 @@ export async function deployApplication({
               }))
             : []
 
+        let lambdaEnv = {}
+
+        const url = config[x.name].url
+        if (url !== 'None') {
+            if (url.auth) {
+                addAuth = true
+            }
+            urlConfigs.push({
+                method: url.method,
+                path: url.path,
+                auth: url.auth,
+                name: `Lambda${x.name}${stage}`
+            })
+
+            // lambdaEnv['USERPOOL_ID'] = {
+            //     Ref: 'CognitoUserPool'
+            // }
+
+            // lambdaEnv['USERPOOL_CLIENT_ID'] = {
+            //     Ref: 'CognitoUserPoolClient'
+            // }
+        }
+
         const res = aws.lambda.makeLambda({
             appName: appName,
             name: x.name,
             stage: stage,
             bucketArn: bucketArn,
             bucketKey: x.path,
-            env: config[x.name] ? config[x.name].env : {},
+            env: config[x.name]
+                ? { ...config[x.name].env, ...lambdaEnv }
+                : lambdaEnv,
             handler: 'index.handler',
             permissions: permissions,
             timeout:
@@ -207,19 +280,6 @@ export async function deployApplication({
                 ...cf.Resources
             }
         }
-
-        const url = config[x.name].url
-        if (url !== 'None') {
-            if (url.auth) {
-                addAuth = true
-            }
-            urlConfigs.push({
-                method: url.method,
-                path: url.path,
-                auth: url.auth,
-                name: `Lambda${x.name}${stage}`
-            })
-        }
     })
 
     if (urlConfigs.length > 0) {
@@ -228,13 +288,13 @@ export async function deployApplication({
             stage
         }
 
-        if (addAuth) {
-            // @ts-ignore
-            httpApiConfig.auth = {
-                poolIdRef: 'CognitoUserPool',
-                clientIdRef: 'CognitoUserPoolClient'
-            }
-        }
+        // if (addAuth) {
+        //     // @ts-ignore
+        //     httpApiConfig.auth = {
+        //         poolIdRef: 'CognitoUserPool',
+        //         clientIdRef: 'CognitoUserPoolClient'
+        //     }
+        // }
         const httpApi = aws.apigateway.makeHttpApi(httpApiConfig)
         const httpRoutes = urlConfigs.reduce(
             (acc, k) => {
@@ -278,18 +338,18 @@ export async function deployApplication({
         }
     }
 
-    if (addAuth) {
-        const cog = aws.cognito.makeCognito(appName, stage)
-        template.Resources = {
-            ...template.Resources,
-            ...cog.Resources
-        }
+    // if (addAuth) {
+    //     const cog = aws.cognito.makeCognito(appName, stage)
+    //     template.Resources = {
+    //         ...template.Resources,
+    //         ...cog.Resources
+    //     }
 
-        template.Outputs = {
-            ...template.Outputs,
-            ...cog.Outputs
-        }
-    }
+    //     template.Outputs = {
+    //         ...template.Outputs,
+    //         ...cog.Outputs
+    //     }
+    // }
 
     template.Resources = {
         ...template.Resources,
@@ -305,7 +365,7 @@ export async function deployApplication({
      * Result
      */
 
-    let outputs: string[] = []
+    let outputs = []
 
     if (urlConfigs.length > 0) {
         outputs.push('ApiUrl')
@@ -328,7 +388,7 @@ export async function deployApplication({
         throw new Error(result.message)
     }
 
-    const theResult: Record<string, any> = {}
+    const theResult = {}
 
     if (urlConfigs.length > 0) {
         theResult.endpoints = urlConfigs.map((x) => {
