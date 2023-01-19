@@ -4,69 +4,20 @@ import { deployInfra } from 'rise-deployinfra'
 import process from 'node:process'
 
 /**
- * @typedef {object} ZipConfig
- * @param {string} functionsLocation
- * @param {string} zipTarget
- * @param {string} hiddenFolder
- */
-
-/**
- * @typedef {object} EventRule
- * @param {string} source
- * @param {string} name
- * @param {string} bus
- */
-
-/**
- * @typedef {object} UrlConfig
- * @param {string} method
- * @param {string} path
- * @param {boolean} auth
- */
-
-/**
- * @typedef {object} Permission
- * @param {string | Array.of<string>} Action
- * @param {string | Array.of<string>} Effect
- * @param {string | Array.of<string>} Resource
- */
-
-/**
- * @typedef {object} AlarmConfig
- * @param {number} threshold
- * @param {string} snsTopic
- * @param {string} [description]
- * @param {number} [period]
- * @param {number} [evaluationPeriods]
- */
-/**
- * @typedef {object} FunctionConfig
- * @param {UrlConfig | "None"} url
- * @param {object} env Record<string, string>
- * @param {Array.of<Permission>} permissions
- * @param {EventRule | "None"} eventRule
- * @param {AlarmConfig | "None"} alarm
- * @param {number} timeout
- * @param {Array.of<string>} layers
- * @param {object} [dashboard] Record<string, string>
- */
-
-/**
  * @param {object} props
  * @param {string} props.region
  * @param {string} props.appName
  * @param {string} props.bucketArn
  * @param {string} props.stage
  * @param {boolean} props.dashboard
- * @param {object} props.config  Record<string, FunctionConfig>
- * @param {ZipConfig} props.zipConfig
+ * @param {object} props.config
+ * @param {object} props.zipConfig
  * @param {object} [props.additionalResources]
  */
 export async function deployApplication({
     region,
     appName,
     bucketArn,
-    dashboard,
     stage,
     config,
     zipConfig,
@@ -99,77 +50,7 @@ export async function deployApplication({
     }
 
     /**
-     * Dashboard
-     *
-     */
-    if (dashboard) {
-        const cfDashboard = aws.cloudwatch.makeDashboard({
-            name: `${appName}${stage}`,
-            // @ts-ignore
-            rows: Object.keys(config).map((l, i) => {
-                const dConfig =
-                    config[l] && config[l].dashboard
-                        ? config[l].dashboard
-                        : false
-
-                if (!dConfig) {
-                    return {
-                        type: 'LAMBDAROW',
-                        verticalPosition: i,
-                        name: l,
-                        region: region,
-                        functionName: `${appName}-${l}-${stage}`,
-                        docs: `# ${l}`
-                    }
-                }
-
-                let row = {
-                    type: 'LAMBDAROW',
-                    verticalPosition: i,
-                    name: l,
-                    region: region,
-                    functionName: `${appName}-${l}-${stage}`,
-                    docs: dConfig.doc || `# ${l}`
-                }
-
-                if (dConfig.invocationAlarm) {
-                    // @ts-ignore
-                    row.invocationAlarm = dConfig.invocationAlarm
-                }
-                if (dConfig.invocationGoal) {
-                    // @ts-ignore
-                    row.invocationGoal = dConfig.invocationGoal
-                }
-                if (dConfig.errorAlarm) {
-                    // @ts-ignore
-                    row.errorAlarm = dConfig.errorAlarm
-                }
-                if (dConfig.errorGoal) {
-                    // @ts-ignore
-                    row.errorGoal = dConfig.errorGoal
-                }
-                if (dConfig.durationAlarm) {
-                    // @ts-ignore
-                    row.durationAlarm = dConfig.durationAlarm
-                }
-                if (dConfig.durationGoal) {
-                    // @ts-ignore
-                    row.durationGoal = dConfig.durationGoal
-                }
-
-                return row
-            })
-        })
-
-        template.Resources = {
-            ...template.Resources,
-            ...cfDashboard.Resources
-        }
-    }
-
-    /**
      * Alarms
-     *
      */
     Object.keys(config).map((l, i) => {
         const functionConfig = config[l]
@@ -196,8 +77,7 @@ export async function deployApplication({
     })
 
     /**
-     * Make Lamnda CF
-     *
+     * Make Lamnda
      */
     let addAuth = false
     let urlConfigs = []
@@ -223,14 +103,6 @@ export async function deployApplication({
                 auth: url.auth,
                 name: `Lambda${x.name}${stage}`
             })
-
-            // lambdaEnv['USERPOOL_ID'] = {
-            //     Ref: 'CognitoUserPool'
-            // }
-
-            // lambdaEnv['USERPOOL_CLIENT_ID'] = {
-            //     Ref: 'CognitoUserPoolClient'
-            // }
         }
 
         const res = aws.lambda.makeLambda({
@@ -288,13 +160,6 @@ export async function deployApplication({
             stage
         }
 
-        // if (addAuth) {
-        //     // @ts-ignore
-        //     httpApiConfig.auth = {
-        //         poolIdRef: 'CognitoUserPool',
-        //         clientIdRef: 'CognitoUserPoolClient'
-        //     }
-        // }
         const httpApi = aws.apigateway.makeHttpApi(httpApiConfig)
         const httpRoutes = urlConfigs.reduce(
             (acc, k) => {
@@ -304,10 +169,6 @@ export async function deployApplication({
                     functionReference: k.name
                 }
 
-                if (k.auth) {
-                    // @ts-ignore
-                    httpApiRouteConfig.authorizerRef = 'ApiAuthorizer'
-                }
                 const x = aws.apigateway.makeHttpApiRoute(httpApiRouteConfig)
                 acc.Resources = {
                     ...acc.Resources,
@@ -326,30 +187,13 @@ export async function deployApplication({
             ...template.Resources,
             ...httpApi.Resources,
             ...httpRoutes.Resources
-            // ...apiGateway.Resources,
-            // ...apiGatewayRoutes.Resources
         }
         template.Outputs = {
             ...template.Outputs,
             ...httpApi.Outputs,
             ...httpRoutes.Outputs
-            // ...apiGateway.Outputs,
-            // ...apiGatewayRoutes.Outputs
         }
     }
-
-    // if (addAuth) {
-    //     const cog = aws.cognito.makeCognito(appName, stage)
-    //     template.Resources = {
-    //         ...template.Resources,
-    //         ...cog.Resources
-    //     }
-
-    //     template.Outputs = {
-    //         ...template.Outputs,
-    //         ...cog.Outputs
-    //     }
-    // }
 
     template.Resources = {
         ...template.Resources,
@@ -364,7 +208,6 @@ export async function deployApplication({
     /**
      * Result
      */
-
     let outputs = []
 
     if (urlConfigs.length > 0) {
@@ -389,7 +232,6 @@ export async function deployApplication({
     }
 
     const theResult = {}
-
     if (urlConfigs.length > 0) {
         theResult.endpoints = urlConfigs.map((x) => {
             const n = x.name.slice(6).slice(0, -Math.abs(stage.length))

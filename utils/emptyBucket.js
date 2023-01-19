@@ -44,7 +44,7 @@ export async function emptyBucket({ bucketName, keyPrefix }) {
             Delete: { Objects: objectsToDelete }
         }
 
-        const res = await s3.deleteObjects(params).promise()
+        await s3.deleteObjects(params).promise()
         return willEmptyBucket
     }
 }

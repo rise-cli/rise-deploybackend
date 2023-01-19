@@ -8,7 +8,6 @@ import { updateLambdaCode } from './utils/updateCode.js'
 import { emptyBucket } from './utils/emptyBucket.js'
 import process from 'node:process'
 
-// ProjectConfig
 export async function deployBackend(config) {
     cli.clear()
     console.time('✅ Deployed Successfully \x1b[2mDeploy Time')
@@ -17,9 +16,7 @@ export async function deployBackend(config) {
     /**
      * Zip Code
      */
-    //cli.startLoadingMessage('Zipping up code')
     await zipLambdas(config.zipConfig)
-    //cli.endLoadingMessage()
     const deployName = config.deployName
 
     /**
@@ -34,31 +31,35 @@ export async function deployBackend(config) {
 
         config.app.bucketName = bucketName
     }
+
+    /**
+     * Upload code to S3
+     */
     cli.clear()
     cli.startLoadingMessage('Uploading code to AWS S3')
     await uploadLambdas(config.app.bucketName, config.zipConfig)
     cli.endLoadingMessage()
+
+    /**
+     * Deploy Application
+     */
     cli.clear()
     if (config.deployInfra) {
         cli.startLoadingMessage('Preparing CloudFormation Template')
-        /**
-         * Deploy Application
-         */
         const deployResult = await deployApplication({
             region: config.app.region,
             appName: config.app.appName,
             bucketArn: 'arn:aws:s3:::' + config.app.bucketName,
             stage: config.app.stage,
             config: config.functions,
-            dashboard: config.app.dashboard,
             zipConfig: config.zipConfig,
             additionalResources: config.additionalResources
         })
 
-        cli.clear()
         /**
          * Update Code
          */
+        cli.clear()
         cli.startLoadingMessage('Updating Lambda Functions')
         await updateLambdaCode({
             appName: config.app.appName,
@@ -68,13 +69,14 @@ export async function deployBackend(config) {
             region: config.app.region
         })
         cli.endLoadingMessage()
-        cli.clear()
 
-        console.timeEnd('✅ Deployed Successfully \x1b[2mDeploy Time')
-        console.log('')
         /**
          * Display Result
          */
+        cli.clear()
+        console.timeEnd('✅ Deployed Successfully \x1b[2mDeploy Time')
+        console.log('')
+
         if (deployResult.endpoints) {
             cli.printInfoMessage('Endpoints')
             deployResult.endpoints.forEach((x) => {
@@ -85,7 +87,6 @@ export async function deployBackend(config) {
         if (deployResult.userPoolClient) {
             console.log('')
             cli.printInfoMessage('User Pool Details')
-
             cli.print(cli.makeDimText('PoolId:   ' + deployResult.userPool))
             cli.print(
                 cli.makeDimText('ClientId: ' + deployResult.userPoolClient)
@@ -94,10 +95,11 @@ export async function deployBackend(config) {
 
         cli.showCursor()
     } else {
-        cli.startLoadingMessage('Updating Lambda Functions')
         /**
          * Update Code
          */
+        cli.clear()
+        cli.startLoadingMessage('Updating Lambda Functions')
         await updateLambdaCode({
             appName: config.app.appName,
             bucket: config.app.bucketName,
@@ -105,9 +107,9 @@ export async function deployBackend(config) {
             zipConfig: config.zipConfig,
             region: config.app.region
         })
+
         cli.endLoadingMessage()
         cli.clear()
-
         console.timeEnd('✅ Deployed Successfully \x1b[2mDeploy Time')
         cli.showCursor()
     }
